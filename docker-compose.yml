@@ -8,6 +8,43 @@ services:
       - 'traefik.port=8065'
       - 'traefik.frontend.rule=Host:matter.docker.localhost'
 
+  rocket:
+    image: rocketchat/rocket.chat:latest
+    environment:
+      - ROOT_URL=http://rocket.docker.localhost
+      - MONGO_URL=mongodb://mongo:27017/rocketchat
+      - MONGO_OPLOG_URL=mongodb://mongo:27017/local
+      - MAIL_URL=smtp://mailhog
+#       - HTTP_PROXY=http://proxy.domain.com
+#       - HTTPS_PROXY=http://proxy.domain.com
+    depends_on:
+      - mongo
+    labels:
+      - "traefik.backend=rocket"
+      - "traefik.port=3000"
+      - "traefik.frontend.rule=Host:rocket.docker.localhost"
+
+  mongo:
+    image: mongo:3.2
+    command: mongod --smallfiles --oplogSize 128 --replSet rs0
+    labels:
+      - "traefik.enable=false"
+
+  # this container's job is just run the command to initialize the replica set.
+  # it will run the command and remove himself (it will not stay running)
+  mongo-init-replica:
+    image: mongo:3.2
+    command: 'mongo mongo/rocketchat --eval "rs.initiate({ _id: ''rs0'', members: [ { _id: 0, host: ''mongo:27017'' } ]})"'
+    depends_on:
+      - mongo
+
+  mailhog:
+    image: mailhog/mailhog
+    labels:
+      - 'traefik.backend=mailhog'
+      - 'traefik.port=8025'
+      - 'traefik.frontend.rule=Host:mailhog.docker.localhost'
+
   traefik:
     image: traefik:1.4.1
     command: -c /dev/null --web --docker --docker.domain=docker.localhost --logLevel=DEBUG
